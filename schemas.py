@@ -27,3 +27,19 @@ class RetrievedChunk(BaseModel):
     text: str
     distance: float
     score: float
+
+
+class SourceRef(BaseModel):
+    """Источник, на который опирается ответ: файл и идентификатор чанка."""
+
+    source_name: str
+    chunk_id: str
+
+
+class RagAnswer(BaseModel):
+    """Ответ модели вместе с источниками и найденными чанками."""
+
+    answer: str
+    sources: list[SourceRef]
+    is_grounded: bool
+    chunks: list[RetrievedChunk]
