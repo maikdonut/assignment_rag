@@ -7,3 +7,12 @@ class Document(BaseModel):
     document_id: str
     source_name: str
     text: str
+
+
+class Chunk(BaseModel):
+    """Фрагмент документа с метаданными для дальнейшего поиска."""
+
+    document_id: str
+    source_name: str
+    chunk_id: str
+    text: str
