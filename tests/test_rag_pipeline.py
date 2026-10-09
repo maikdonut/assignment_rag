@@ -3,13 +3,16 @@ from typing import cast
 import pytest
 from weaviate.client import WeaviateClient
 
+from config import RELEVANCE_THRESHOLD
 from prompts import SYSTEM_PROMPT, UNGROUNDED_SYSTEM_PROMPT, format_context
 from rag_pipeline import (
     EMPTY_CONTEXT_ANSWER,
+    WEAK_CONTEXT_ANSWER,
     OpenRouterChat,
     answer,
     answer_without_retrieval,
     generate_answer,
+    is_context_sufficient,
 )
 from schemas import RetrievedChunk
 
@@ -92,6 +95,38 @@ def test_generate_answer_skips_model_when_no_chunks() -> None:
     assert result.is_grounded is False
     assert result.sources == []
     assert result.chunks == []
+
+
+def test_generate_answer_skips_model_when_scores_below_threshold() -> None:
+    chunks = [
+        _hit(score=RELEVANCE_THRESHOLD - 0.1),
+        _hit(source_name="hours.txt", chunk_id="hours.txt:1", score=RELEVANCE_THRESHOLD - 0.05),
+    ]
+    result = generate_answer("Какой курс доллара?", chunks, _ForbiddenChat())
+    assert result.answer == WEAK_CONTEXT_ANSWER
+    assert result.is_grounded is False
+    assert result.sources == []
+    assert result.chunks == chunks
+
+
+def test_generate_answer_calls_model_when_one_chunk_meets_threshold() -> None:
+    chunks = [
+        _hit(score=RELEVANCE_THRESHOLD - 0.1),
+        _hit(source_name="hours.txt", chunk_id="hours.txt:1", text="Открыто до 20:00.", score=RELEVANCE_THRESHOLD),
+    ]
+    chat = _RecordingChat("До 20:00.")
+    result = generate_answer("До которого часа открыто?", chunks, chat)
+    assert result.answer == "До 20:00."
+    assert result.is_grounded is True
+    assert len(result.sources) == 2
+    assert result.chunks == chunks
+    assert len(chat.calls) == 1
+    assert "Открыто до 20:00." in chat.calls[0][1]
+
+
+def test_is_context_sufficient_accepts_score_equal_to_threshold() -> None:
+    assert is_context_sufficient([_hit(score=RELEVANCE_THRESHOLD)]) is True
+    assert is_context_sufficient([_hit(score=RELEVANCE_THRESHOLD - 0.01)]) is False
 
 
 def test_generate_answer_rejects_blank_question() -> None:

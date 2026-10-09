@@ -1,0 +1,30 @@
+[
+  {
+    "question": "До скольки вечером в четверг открыты двери на улице Седар?",
+    "source_name": "opening_hours.txt"
+  },
+  {
+    "question": "На какой срок дают обычную книгу, если это не новинка месяца?",
+    "source_name": "borrowing_rules.txt"
+  },
+  {
+    "question": "Во сколько обойдётся карта для человека, который в Харборлайте не живёт?",
+    "source_name": "membership.txt"
+  },
+  {
+    "question": "Какой телефон указан для посетителей главного отделения?",
+    "source_name": "contact_and_locations.txt"
+  },
+  {
+    "question": "По какому адресу находится читальный зал «Северный пирс»?",
+    "source_name": "contact_and_locations.txt"
+  },
+  {
+    "question": "На какой адрес писать про лекции и час историй, а не про штрафы?",
+    "source_name": "contact_and_locations.txt"
+  },
+  {
+    "question": "Сколько электронных книг OverPier житель может держать одновременно?",
+    "source_name": "digital_catalog.txt"
+  }
+]

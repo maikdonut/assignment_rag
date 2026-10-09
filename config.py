@@ -11,6 +11,8 @@ COLLECTION_NAME = "KnowledgeChunk"
 EMBEDDING_MODEL = "deepvk/USER2-base"
 EMBEDDING_BATCH_SIZE = 16
 TOP_K = 5
+# Худший хороший top-1 — 0.63, лучший чужой — 0.51. Порог стоит в этом зазоре.
+RELEVANCE_THRESHOLD = 0.57
 
 
 def _load_env_file(path: Path) -> None:

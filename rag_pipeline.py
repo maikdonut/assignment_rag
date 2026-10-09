@@ -4,7 +4,14 @@ from typing import Protocol
 from openai import APIConnectionError, APIStatusError, AuthenticationError, OpenAI
 from weaviate.client import WeaviateClient
 
-from config import COLLECTION_NAME, LLM_MODEL, OPENROUTER_API_KEY, OPENROUTER_BASE_URL, TOP_K
+from config import (
+    COLLECTION_NAME,
+    LLM_MODEL,
+    OPENROUTER_API_KEY,
+    OPENROUTER_BASE_URL,
+    RELEVANCE_THRESHOLD,
+    TOP_K,
+)
 from prompts import SYSTEM_PROMPT, UNGROUNDED_SYSTEM_PROMPT, build_user_message
 from retriever import search
 from schemas import RagAnswer, RetrievedChunk, SourceRef
@@ -12,6 +19,7 @@ from schemas import RagAnswer, RetrievedChunk, SourceRef
 logger = logging.getLogger(__name__)
 
 EMPTY_CONTEXT_ANSWER = "В базе знаний нет фрагментов по этому вопросу."
+WEAK_CONTEXT_ANSWER = "В базе знаний недостаточно информации по этому вопросу."
 
 
 class ChatModel(Protocol):
@@ -74,12 +82,20 @@ class OpenRouterChat:
         self._client.close()
 
 
+def is_context_sufficient(
+    chunks: list[RetrievedChunk],
+    threshold: float = RELEVANCE_THRESHOLD,
+) -> bool:
+    """Проверяет, что хотя бы один чанк не ниже порога. Пустой список — недостаточно."""
+    return any(chunk.score >= threshold for chunk in chunks)
+
+
 def generate_answer(
     question: str,
     chunks: list[RetrievedChunk],
     chat: ChatModel | None = None,
 ) -> RagAnswer:
-    """Строит ответ по уже найденным чанкам. Пустой список чанков модель не вызывает."""
+    """Строит ответ по уже найденным чанкам. Пустой или слабый контекст модель не вызывает."""
     cleaned = question.strip()
     if not cleaned:
         raise ValueError("вопрос пустой")
@@ -91,7 +107,16 @@ def generate_answer(
             is_grounded=False,
             chunks=[],
         )
+    if not is_context_sufficient(chunks):
+        logger.info("решение по порогу: модель не вызывается, ни один фрагмент не прошёл")
+        return RagAnswer(
+            answer=WEAK_CONTEXT_ANSWER,
+            sources=[],
+            is_grounded=False,
+            chunks=chunks,
+        )
 
+    logger.info("решение по порогу: контекст прошёл %.2f", RELEVANCE_THRESHOLD)
     logger.info("контекст передан в модель, фрагментов: %s", len(chunks))
     text = _complete(chat, SYSTEM_PROMPT, build_user_message(cleaned, chunks))
     return RagAnswer(

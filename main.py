@@ -2,7 +2,7 @@ import argparse
 import logging
 
 from chunking import chunk_documents
-from config import COLLECTION_NAME, KNOWLEDGE_BASE_DIR
+from config import COLLECTION_NAME, KNOWLEDGE_BASE_DIR, RELEVANCE_THRESHOLD
 from embedder import embed_texts, resolve_device
 from loader import load_documents
 from rag_pipeline import answer, answer_without_retrieval
@@ -108,6 +108,7 @@ def ask(question: str, *, compare: bool = False) -> None:
 def _print_answer(result: RagAnswer) -> None:
     print("Ответ:")
     print(result.answer)
+    print(_context_line(result))
     print("Источники:")
     if not result.sources:
         print("нет")
@@ -116,6 +117,15 @@ def _print_answer(result: RagAnswer) -> None:
     print(f"Найдено фрагментов: {len(result.chunks)}")
     for index, hit in enumerate(result.chunks, start=1):
         _print_hit(index, hit)
+
+
+def _context_line(result: RagAnswer) -> str:
+    """Одна строка: прошёл ли лучший контекст порог и вызывалась ли модель."""
+    if not result.chunks:
+        return "Контекст: фрагментов нет, модель не вызывалась"
+    if result.is_grounded:
+        return f"Контекст: прошёл порог {RELEVANCE_THRESHOLD:.2f}"
+    return f"Контекст: ниже порога {RELEVANCE_THRESHOLD:.2f}, модель не вызывалась"
 
 
 def _print_hit(index: int, hit: RetrievedChunk) -> None:

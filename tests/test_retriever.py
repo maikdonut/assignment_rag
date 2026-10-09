@@ -8,7 +8,7 @@ from pydantic import BaseModel, TypeAdapter
 from weaviate.client import WeaviateClient
 
 from chunking import chunk_documents
-from config import KNOWLEDGE_BASE_DIR, TOP_K, WEAVIATE_HOST, WEAVIATE_HTTP_PORT
+from config import KNOWLEDGE_BASE_DIR, RELEVANCE_THRESHOLD, TOP_K, WEAVIATE_HOST, WEAVIATE_HTTP_PORT
 from embedder import embed_texts
 from loader import load_documents
 from retriever import distance_to_score, search
@@ -17,11 +17,16 @@ from weaviate_store import connect, replace_chunks
 
 _TEST_COLLECTION = "KnowledgeChunkRetrievalTest"
 _QUESTIONS_PATH = Path(__file__).parent / "data" / "retrieval_questions.json"
+_OUT_OF_SCOPE_PATH = Path(__file__).parent / "data" / "out_of_scope_questions.json"
 
 
 class _QuestionCase(BaseModel):
     question: str
     source_name: str
+
+
+class _OutOfScopeCase(BaseModel):
+    question: str
 
 
 class _FixedVectorModel:
@@ -137,3 +142,39 @@ def test_questions_find_expected_source(weaviate_client) -> None:
         )
         sources = [hit.source_name for hit in hits]
         assert case.source_name in sources, case.question
+
+
+def _load_out_of_scope() -> list[_OutOfScopeCase]:
+    raw = json.loads(_OUT_OF_SCOPE_PATH.read_text(encoding="utf-8"))
+    return TypeAdapter(list[_OutOfScopeCase]).validate_python(raw)
+
+
+@pytest.mark.integration
+def test_relevance_threshold_separates_question_sets(weaviate_client) -> None:
+    documents = load_documents(KNOWLEDGE_BASE_DIR)
+    chunks = chunk_documents(documents)
+    vectors = embed_texts([chunk.text for chunk in chunks])
+    replace_chunks(weaviate_client, chunks, vectors, _TEST_COLLECTION)
+
+    good = _load_questions()
+    assert len(good) >= 5
+    for case in good:
+        hits = search(
+            weaviate_client,
+            case.question,
+            top_k=TOP_K,
+            collection_name=_TEST_COLLECTION,
+        )
+        assert hits[0].score >= RELEVANCE_THRESHOLD, case.question
+        assert case.source_name in [hit.source_name for hit in hits], case.question
+
+    out_of_scope = _load_out_of_scope()
+    assert len(out_of_scope) >= 5
+    for case in out_of_scope:
+        hits = search(
+            weaviate_client,
+            case.question,
+            top_k=TOP_K,
+            collection_name=_TEST_COLLECTION,
+        )
+        assert hits[0].score < RELEVANCE_THRESHOLD, case.question
