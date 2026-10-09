@@ -1,15 +1,34 @@
+import argparse
 import logging
 
 from chunking import chunk_documents
-from config import KNOWLEDGE_BASE_DIR
+from config import COLLECTION_NAME, KNOWLEDGE_BASE_DIR
+from embedder import embed_texts, resolve_device
 from loader import load_documents
+from schemas import Chunk
+from weaviate_store import connect, fetch_chunk, replace_chunks
 
 _EXAMPLE_COUNT = 3
+_PREVIEW_CHARS = 200
 
 
-def main() -> None:
-    """Печатает список документов и несколько примеров чанков с метаданными."""
+def main(argv: list[str] | None = None) -> None:
+    """Печатает документы и примеры чанков либо загружает чанки в Weaviate."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    for logger_name in ("httpx", "httpcore", "huggingface_hub", "sentence_transformers"):
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
+    parser = argparse.ArgumentParser(description="Локальная база знаний библиотеки")
+    subparsers = parser.add_subparsers(dest="command")
+    subparsers.add_parser("ingest", help="Загрузить чанки и эмбеддинги в Weaviate")
+    args = parser.parse_args(argv)
+    if args.command == "ingest":
+        ingest()
+        return
+    show_documents()
+
+
+def show_documents() -> None:
+    """Печатает список документов и несколько примеров чанков с метаданными."""
     documents = load_documents(KNOWLEDGE_BASE_DIR)
     chunks = chunk_documents(documents)
     print(f"Загружено документов: {len(documents)}")
@@ -24,6 +43,38 @@ def main() -> None:
         print(f"длина={len(chunk.text)}")
         print(chunk.text)
         print("---")
+
+
+def ingest() -> None:
+    """Считает эмбеддинги и заменяет коллекцию чанков в Weaviate."""
+    documents = load_documents(KNOWLEDGE_BASE_DIR)
+    chunks = chunk_documents(documents)
+    device = resolve_device()
+    vectors = embed_texts([chunk.text for chunk in chunks], device=device)
+    try:
+        client = connect()
+    except (ConnectionError, OSError):
+        raise SystemExit(1) from None
+    try:
+        count = replace_chunks(client, chunks, vectors, COLLECTION_NAME)
+        sample = fetch_chunk(client, chunks[0].chunk_id, COLLECTION_NAME) if chunks else None
+    finally:
+        client.close()
+    print(f"Устройство: {device}")
+    print(f"Объектов в Weaviate: {count}")
+    if sample is not None:
+        _print_stored_chunk(sample)
+
+
+def _print_stored_chunk(chunk: Chunk) -> None:
+    print("Объект из базы:")
+    print(f"chunk_id={chunk.chunk_id}")
+    print(f"document_id={chunk.document_id}")
+    print(f"source_name={chunk.source_name}")
+    preview = chunk.text
+    if len(preview) > _PREVIEW_CHARS:
+        preview = preview[:_PREVIEW_CHARS] + "..."
+    print(preview)
 
 
 if __name__ == "__main__":
