@@ -10,6 +10,7 @@ CHUNK_OVERLAP = 150
 COLLECTION_NAME = "KnowledgeChunk"
 EMBEDDING_MODEL = "deepvk/USER2-base"
 EMBEDDING_BATCH_SIZE = 16
+TOP_K = 5
 
 
 def _load_env_file(path: Path) -> None:

@@ -5,7 +5,8 @@ from chunking import chunk_documents
 from config import COLLECTION_NAME, KNOWLEDGE_BASE_DIR
 from embedder import embed_texts, resolve_device
 from loader import load_documents
-from schemas import Chunk
+from retriever import search
+from schemas import Chunk, RetrievedChunk
 from weaviate_store import connect, fetch_chunk, replace_chunks
 
 _EXAMPLE_COUNT = 3
@@ -13,16 +14,21 @@ _PREVIEW_CHARS = 200
 
 
 def main(argv: list[str] | None = None) -> None:
-    """Печатает документы и примеры чанков либо загружает чанки в Weaviate."""
+    """Печатает документы, загружает чанки в Weaviate или ищет фрагменты по вопросу."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     for logger_name in ("httpx", "httpcore", "huggingface_hub", "sentence_transformers"):
         logging.getLogger(logger_name).setLevel(logging.WARNING)
     parser = argparse.ArgumentParser(description="Локальная база знаний библиотеки")
     subparsers = parser.add_subparsers(dest="command")
     subparsers.add_parser("ingest", help="Загрузить чанки и эмбеддинги в Weaviate")
+    ask_parser = subparsers.add_parser("ask", help="Найти чанки по вопросу")
+    ask_parser.add_argument("question", help="Вопрос к базе знаний")
     args = parser.parse_args(argv)
     if args.command == "ingest":
         ingest()
+        return
+    if args.command == "ask":
+        ask(args.question)
         return
     show_documents()
 
@@ -64,6 +70,35 @@ def ingest() -> None:
     print(f"Объектов в Weaviate: {count}")
     if sample is not None:
         _print_stored_chunk(sample)
+
+
+def ask(question: str) -> None:
+    """Печатает top-k чанков по вопросу: оценка, дистанция, источник и текст."""
+    try:
+        client = connect()
+    except (ConnectionError, OSError):
+        raise SystemExit(1) from None
+    try:
+        hits = search(client, question)
+    except ValueError as exc:
+        print(exc)
+        raise SystemExit(1) from None
+    finally:
+        client.close()
+    print(f"Найдено фрагментов: {len(hits)}")
+    for index, hit in enumerate(hits, start=1):
+        _print_hit(index, hit)
+
+
+def _print_hit(index: int, hit: RetrievedChunk) -> None:
+    print(f"{index}. score={hit.score:.4f} distance={hit.distance:.4f}")
+    print(f"source_name={hit.source_name}")
+    print(f"chunk_id={hit.chunk_id}")
+    preview = hit.text
+    if len(preview) > _PREVIEW_CHARS:
+        preview = preview[:_PREVIEW_CHARS] + "..."
+    print(preview)
+    print("---")
 
 
 def _print_stored_chunk(chunk: Chunk) -> None:

@@ -1,0 +1,22 @@
+[
+  {
+    "question": "До которого часа в четверг открыто главное отделение на улице Седар?",
+    "source_name": "opening_hours.txt"
+  },
+  {
+    "question": "На сколько дней выдают большинство обычных книг?",
+    "source_name": "borrowing_rules.txt"
+  },
+  {
+    "question": "Сколько стоит гостевая карта библиотеки?",
+    "source_name": "membership.txt"
+  },
+  {
+    "question": "Какую книгу обсуждает книжный клуб в октябре 2026 года?",
+    "source_name": "events.txt"
+  },
+  {
+    "question": "С какого возраста можно стать волонтёром библиотеки?",
+    "source_name": "volunteers.txt"
+  }
+]

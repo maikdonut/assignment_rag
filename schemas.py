@@ -16,3 +16,14 @@ class Chunk(BaseModel):
     source_name: str
     chunk_id: str
     text: str
+
+
+class RetrievedChunk(BaseModel):
+    """Чанк, найденный поиском, с дистанцией Weaviate и оценкой близости."""
+
+    document_id: str
+    source_name: str
+    chunk_id: str
+    text: str
+    distance: float
+    score: float
